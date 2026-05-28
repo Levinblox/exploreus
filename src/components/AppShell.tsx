@@ -10,7 +10,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const onAuth = pathname.startsWith("/auth");
   return (
     <>
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col">{children}</main>
       {!onAuth && <BottomNav />}
     </>
   );

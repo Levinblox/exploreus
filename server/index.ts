@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { pool } from "./db.js";
 import { deleteObject, hasR2, presignPutUrl, publicUrlFor } from "./r2.js";
-import { transcodeVideoInBackground } from "./transcode.js";
+import { generatePosterAt, transcodeVideoInBackground } from "./transcode.js";
 import { auth, requireUser } from "./auth.js";
 
 const app = new Hono();
@@ -350,6 +350,28 @@ app.delete("/api/media/:id", async (c) => {
   }
   await pool.query(`DELETE FROM media WHERE user_id = $1 AND id = $2`, [uid(c), id]);
   return c.json({ ok: true });
+});
+
+// Re-cut a video's cover at a user-chosen timestamp. Operates on the
+// transcoded H.264 file, which plays everywhere, so the picker works in any
+// browser (not just on a device that can decode the original).
+app.post("/api/media/:id/cover", async (c) => {
+  if (!hasR2()) return c.json({ error: "R2 not configured" }, 503);
+  const id = c.req.param("id");
+  const { time } = (await c.req.json()) as { time?: number };
+  const { rows } = await pool.query<{ storage_key: string; thumb_key: string | null; kind: string }>(
+    `SELECT storage_key, thumb_key, kind FROM media WHERE user_id = $1 AND id = $2`,
+    [uid(c), id]
+  );
+  if (rows.length === 0) return c.json({ error: "not found" }, 404);
+  if (rows[0].kind !== "video") return c.json({ error: "not a video" }, 400);
+
+  const newKey = await generatePosterAt(rows[0].storage_key, time ?? 1);
+  await pool.query(`UPDATE media SET thumb_key = $1 WHERE id = $2`, [newKey, id]);
+  if (rows[0].thumb_key && rows[0].thumb_key !== newKey) {
+    await deleteObject(rows[0].thumb_key).catch((e) => console.warn("old cover delete failed", e));
+  }
+  return c.json({ posterUrl: publicUrlFor(newKey) });
 });
 
 // ───────── helpers ─────────

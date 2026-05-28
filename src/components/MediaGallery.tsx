@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hasApi } from "@/lib/api";
-import { deleteMedia, listMedia, uploadMedia } from "@/lib/media";
+import { deleteMedia, listMedia, setCover, uploadMedia } from "@/lib/media";
 import type { Media, MediaParentKind } from "@/lib/types";
 import { UploadPreview, type UploadItem } from "./UploadPreview";
 
@@ -202,6 +202,15 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
           item={lightbox}
           onClose={() => setLightbox(null)}
           onDelete={canUpload ? () => { onDelete(lightbox); setLightbox(null); } : undefined}
+          onSetCover={
+            canUpload && lightbox.kind === "video"
+              ? async (time) => {
+                  const posterUrl = await setCover(lightbox.id, time);
+                  setItems((prev) => prev?.map((x) => (x.id === lightbox.id ? { ...x, posterUrl } : x)) ?? null);
+                  setLightbox((l) => (l ? { ...l, posterUrl } : l));
+                }
+              : undefined
+          }
         />
       )}
 
@@ -220,11 +229,29 @@ function Lightbox({
   item,
   onClose,
   onDelete,
+  onSetCover,
 }: {
   item: Media;
   onClose: () => void;
   onDelete?: () => void;
+  onSetCover?: (time: number) => Promise<void>;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [coverState, setCoverState] = useState<"idle" | "saving" | "done">("idle");
+
+  async function saveCover() {
+    const v = videoRef.current;
+    if (!v || !onSetCover) return;
+    setCoverState("saving");
+    try {
+      await onSetCover(v.currentTime);
+      setCoverState("done");
+      setTimeout(() => setCoverState("idle"), 2000);
+    } catch {
+      setCoverState("idle");
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
@@ -237,6 +264,7 @@ function Lightbox({
       >
         {item.kind === "video" ? (
           <video
+            ref={videoRef}
             src={item.url}
             poster={item.posterUrl ?? undefined}
             controls
@@ -267,6 +295,17 @@ function Lightbox({
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
             </svg>
+          </button>
+        )}
+
+        {onSetCover && item.kind === "video" && (
+          <button
+            type="button"
+            onClick={saveCover}
+            disabled={coverState === "saving"}
+            className="absolute bottom-14 right-2 z-10 rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-lg active:scale-95 disabled:opacity-70"
+          >
+            {coverState === "saving" ? "Saving…" : coverState === "done" ? "Cover set ✓" : "Set as cover"}
           </button>
         )}
       </div>

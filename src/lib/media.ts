@@ -94,3 +94,13 @@ export async function deleteMedia(id: string): Promise<void> {
   if (!hasApi()) return;
   await apiFetch(`/api/media/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+// Re-cut a video's cover at `time` seconds (server-side, on the transcoded
+// file). Returns the new poster URL.
+export async function setCover(id: string, time: number): Promise<string> {
+  const r = await apiFetch<{ posterUrl: string }>(
+    `/api/media/${encodeURIComponent(id)}/cover`,
+    { method: "POST", body: JSON.stringify({ time }) }
+  );
+  return r.posterUrl;
+}

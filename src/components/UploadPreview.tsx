@@ -42,8 +42,8 @@ export function UploadPreview({ files, onCancel, onConfirm }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/95">
-      <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 text-white">
+    <div className="fixed inset-0 z-50 flex flex-col items-center bg-black/95">
+      <div className="flex w-full max-w-md items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 text-white">
         <button type="button" onClick={onCancel} disabled={busy} className="text-sm font-medium text-white/80">
           Cancel
         </button>
@@ -60,37 +60,40 @@ export function UploadPreview({ files, onCancel, onConfirm }: Props) {
         </button>
       </div>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-8">
-        {entries.map((e, i) => (
-          <div key={i} className="overflow-hidden rounded-2xl bg-zinc-900">
-            {e.isVideo ? (
-              <>
-                <video
-                  ref={(el) => {
-                    videoRefs.current[i] = el;
-                  }}
-                  src={e.url}
-                  controls
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="max-h-[60vh] w-full bg-black object-contain"
-                  onLoadedMetadata={(ev) => {
-                    // Default cover ~1s in (or 10% for very short clips).
-                    const v = ev.currentTarget;
-                    v.currentTime = Math.min(1, (v.duration || 1) * 0.1);
-                  }}
-                />
-                <p className="px-3 py-2.5 text-xs text-white/70">
-                  Scrub to the frame you want — that becomes the cover.
-                </p>
-              </>
-            ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={e.url} alt="" className="max-h-[60vh] w-full object-contain" />
-            )}
-          </div>
-        ))}
+      <div className="w-full max-w-md flex-1 overflow-y-auto px-4">
+        {/* Center a single item; scroll when there are several. */}
+        <div className="flex min-h-full flex-col justify-center gap-6 py-6">
+          {entries.map((e, i) => (
+            <div key={i} className="overflow-hidden rounded-2xl bg-zinc-900">
+              {e.isVideo ? (
+                <>
+                  <video
+                    ref={(el) => {
+                      videoRefs.current[i] = el;
+                    }}
+                    src={e.url}
+                    controls
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="max-h-[60vh] w-full bg-black object-contain"
+                    onLoadedMetadata={(ev) => {
+                      // Default cover ~1s in (or 10% for very short clips).
+                      const v = ev.currentTarget;
+                      v.currentTime = Math.min(1, (v.duration || 1) * 0.1);
+                    }}
+                  />
+                  <p className="px-3 py-2.5 text-xs text-white/70">
+                    A cover is picked automatically — open the video after upload to change it.
+                  </p>
+                </>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={e.url} alt="" className="max-h-[60vh] w-full object-contain" />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

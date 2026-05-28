@@ -138,3 +138,44 @@ function runFfmpeg(args: string[]): Promise<void> {
     });
   });
 }
+
+// Re-cut a video's poster at `time` seconds and upload it under a fresh key
+// (fresh so the CDN serves the new image immediately). Returns the new key.
+// Used when the user picks a cover from the already-transcoded H.264 video.
+export async function generatePosterAt(videoKey: string, time: number): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "cover-"));
+  try {
+    const s3 = getClient();
+    const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: videoKey }));
+    const body = obj.Body as { transformToByteArray: () => Promise<Uint8Array> } | undefined;
+    if (!body) throw new Error("R2 returned empty body");
+    const inputPath = join(dir, "in.mp4");
+    const outPath = join(dir, "cover.jpg");
+    await writeFile(inputPath, await body.transformToByteArray());
+
+    const at = Number.isFinite(time) ? Math.max(0, time) : 1;
+    await runFfmpeg([
+      "-y",
+      "-ss", String(at),
+      "-i", inputPath,
+      "-frames:v", "1",
+      "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(iw,ih),-2,min(640,ih))'",
+      "-q:v", "3",
+      outPath,
+    ]);
+
+    const key =
+      videoKey.replace(/\.[^.]+$/, "") + "_cover_" + Math.random().toString(36).slice(2, 8) + ".jpg";
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: await readFile(outPath),
+        ContentType: "image/jpeg",
+      })
+    );
+    return key;
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}

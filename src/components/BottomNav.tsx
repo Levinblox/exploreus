@@ -19,7 +19,7 @@ export function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-30"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="mx-auto max-w-3xl px-4 pb-3 pt-2">
+      <div className="mx-auto max-w-md px-4 pb-3 pt-2">
         <div className="flex items-stretch justify-around rounded-full bg-white/85 px-2 py-1.5 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)] ring-1 ring-black/5 backdrop-blur-xl dark:bg-zinc-900/85 dark:ring-white/10">
           {tabs.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== "/" && pathname.startsWith(href));
