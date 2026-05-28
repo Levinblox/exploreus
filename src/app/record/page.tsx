@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { startLocationWatch, type LocationWatcher } from "@/lib/location";
 import { MapView } from "@/components/MapView";
 import {
@@ -15,9 +15,11 @@ import {
   haversineMeters,
   movingTime,
   totalDistanceM,
+  trailProgress,
 } from "@/lib/geo";
 import { listHikesFull, saveHike } from "@/lib/hikes";
-import type { GeoPoint, Hike } from "@/lib/types";
+import { getTrail } from "@/lib/trails";
+import type { GeoPoint, Hike, Trail } from "@/lib/types";
 
 type Status = "idle" | "recording" | "paused";
 
@@ -37,7 +39,18 @@ const MAX_TRACK_ACCURACY_M = 20;
 const MIN_MOVEMENT_M = 4;
 
 export default function RecordPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Loading…</div>}>
+      <RecordInner />
+    </Suspense>
+  );
+}
+
+function RecordInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  const trailId = params.get("trail");
+  const [followTrail, setFollowTrail] = useState<Trail | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [points, setPoints] = useState<GeoPoint[]>([]);
   const [userLoc, setUserLoc] = useState<UserLoc | null>(null);
@@ -57,9 +70,33 @@ export default function RecordPage() {
   const [compassHeading, setCompassHeading] = useState<number | null>(null);
   const [pastTracks, setPastTracks] = useState<GeoPoint[][]>([]);
 
+  // Load the trail being followed (if we arrived via "Follow this trail").
+  useEffect(() => {
+    if (!trailId) {
+      setFollowTrail(null);
+      return;
+    }
+    let cancelled = false;
+    getTrail(trailId).then((t) => !cancelled && setFollowTrail(t ?? null));
+    return () => {
+      cancelled = true;
+    };
+  }, [trailId]);
+
+  // The followed trail's path, and a faint map overlay of it.
+  const followPath = useMemo(
+    () => (followTrail ? followTrail.segments.flat() : null),
+    [followTrail]
+  );
+  const followTrack = useMemo<GeoPoint[] | null>(
+    () => (followPath ? followPath.map((p) => ({ lat: p.lat, lng: p.lng, alt: null, t: 0 })) : null),
+    [followPath]
+  );
+
   const distanceM = totalDistanceM(points);
   const elevationM = elevationGainM(points);
   const speedMps = currentSpeedMps(points);
+  const progress = followPath && userLoc ? trailProgress(followPath, userLoc) : null;
   const durationMs =
     startedAt != null
       ? (status === "paused" && pauseStartRef.current != null
@@ -286,7 +323,7 @@ export default function RecordPage() {
         points={points}
         userLocation={userLoc}
         compassHeading={compassHeading}
-        backgroundTracks={pastTracks}
+        backgroundTracks={followTrack ? [followTrack, ...pastTracks] : pastTracks}
         follow={true}
         styleControlPosition="top-left-offset"
         className="absolute inset-0"
@@ -363,6 +400,35 @@ export default function RecordPage() {
           {error && !permissionDenied && (
             <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800 dark:bg-red-950/40 dark:text-red-300">
               {error}
+            </div>
+          )}
+
+          {followTrail && (
+            <div className="mb-3 rounded-2xl bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">
+                  Following · {followTrail.name}
+                </span>
+                {progress && (
+                  <span className="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    {Math.round(progress.fraction * 100)}% done
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5 font-display text-2xl font-bold tabular-nums">
+                {progress ? `${formatDistance(progress.remainingM)} to go` : "Waiting for GPS…"}
+              </div>
+              {progress && progress.offRouteM > 50 && (
+                <div className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                  {formatDistance(progress.offRouteM)} off the trail
+                </div>
+              )}
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200/70 dark:bg-emerald-900/50">
+                <div
+                  className="h-full rounded-full bg-emerald-600 transition-[width] duration-500"
+                  style={{ width: `${progress ? Math.min(100, progress.fraction * 100) : 0}%` }}
+                />
+              </div>
             </div>
           )}
 

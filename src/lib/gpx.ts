@@ -91,10 +91,7 @@ export function gpxToTrail(parsed: ParsedGpx): Trail {
   let distanceM = 0;
   for (const seg of segmentsLL) {
     for (let i = 1; i < seg.length; i++) {
-      distanceM += haversineMeters(
-        { lat: seg[i - 1].lat, lng: seg[i - 1].lng, alt: null, t: 0 },
-        { lat: seg[i].lat, lng: seg[i].lng, alt: null, t: 0 }
-      );
+      distanceM += haversineMeters(seg[i - 1], seg[i]);
     }
   }
   return {
