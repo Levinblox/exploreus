@@ -3,11 +3,19 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  device_id   TEXT UNIQUE NOT NULL,
+  device_id   TEXT UNIQUE,
   name        TEXT,
   map_style   TEXT NOT NULL DEFAULT 'outdoors',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Auth + profile (added in iteration 2). device_id stays for backfilling
+-- pre-auth rows; new accounts will have it NULL.
+ALTER TABLE users ALTER COLUMN device_id DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash  TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS age            INT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activities     TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username)) WHERE username IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS hikes (
   id                TEXT PRIMARY KEY,
@@ -42,6 +50,21 @@ CREATE TABLE IF NOT EXISTS user_trails (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS user_trails_user_idx ON user_trails(user_id, created_at DESC);
+-- Trail metadata for save-after-hike + discovery.
+ALTER TABLE user_trails ADD COLUMN IF NOT EXISTS difficulty  TEXT;
+ALTER TABLE user_trails ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE user_trails ADD COLUMN IF NOT EXISTS is_public   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE user_trails ADD COLUMN IF NOT EXISTS source_hike_id TEXT;
+CREATE INDEX IF NOT EXISTS user_trails_public_idx ON user_trails(is_public, created_at DESC) WHERE is_public = TRUE;
+
+-- Saved trails — many-to-many bookmarks of other users' public trails.
+CREATE TABLE IF NOT EXISTS saved_trails (
+  user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  trail_id  TEXT NOT NULL REFERENCES user_trails(id) ON DELETE CASCADE,
+  saved_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, trail_id)
+);
+CREATE INDEX IF NOT EXISTS saved_trails_user_idx ON saved_trails(user_id, saved_at DESC);
 
 CREATE TABLE IF NOT EXISTS media (
   id            TEXT PRIMARY KEY,

@@ -5,18 +5,36 @@ import { cors } from "hono/cors";
 import { ensureUser, pool } from "./db.js";
 import { deleteObject, hasR2, presignPutUrl, publicUrlFor } from "./r2.js";
 import { transcodeVideoInBackground } from "./transcode.js";
+import { auth, requireUser } from "./auth.js";
 
 const app = new Hono();
 
-app.use("*", cors({ origin: "*", allowHeaders: ["Content-Type", "X-Device-Id"] }));
+app.use(
+  "*",
+  cors({ origin: "*", allowHeaders: ["Content-Type", "X-Device-Id", "Authorization"] })
+);
 
-// Middleware: require X-Device-Id header and resolve to user_id.
+// Auth router — /api/auth/signup, /api/auth/login, /api/auth/me.
+app.route("/api/auth", auth);
+
+// Middleware for the rest of /api/*: prefer JWT, fall back to X-Device-Id so
+// the app keeps working before signup. Anonymous device users get a row
+// transparently; signup later upgrades it in place.
 app.use("/api/*", async (c, next) => {
-  const deviceId = c.req.header("X-Device-Id");
-  if (!deviceId || deviceId.length < 8) {
-    return c.json({ error: "missing X-Device-Id" }, 401);
+  // /api/auth/* is handled by the auth router above — never reaches here.
+  const authHeader = c.req.header("Authorization");
+  let userId: string | null = await requireUser(authHeader);
+
+  if (!userId) {
+    const deviceId = c.req.header("X-Device-Id");
+    if (deviceId && deviceId.length >= 8) {
+      userId = await ensureUser(deviceId);
+    }
   }
-  const userId = await ensureUser(deviceId);
+
+  if (!userId) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
   c.set("userId" as never, userId as never);
   await next();
 });

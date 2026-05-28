@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AllHikesMap } from "@/components/AllHikesMap";
 import { HikeCard } from "@/components/HikeCard";
+import { useAuth } from "@/components/AuthProvider";
+import { ACTIVITIES } from "@/lib/auth";
 import { importGpxFilesAsHikes } from "@/lib/gpx";
 import { listHikesFull } from "@/lib/hikes";
 import {
@@ -12,26 +15,36 @@ import {
   formatDuration,
   formatSpeed,
 } from "@/lib/geo";
-import { getUserSettings, initialsFor, updateUserName } from "@/lib/userSettings";
+import { initialsFor } from "@/lib/userSettings";
 import type { Hike } from "@/lib/types";
 
 export default function ProfilePage() {
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const [hikes, setHikes] = useState<Hike[] | null>(null);
-  const [name, setName] = useState("");
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState("");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "success" | "warn" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const name = user?.name ?? user?.username ?? "Hiker";
+  const activityLabels = user
+    ? user.activities
+        .map((a) => ACTIVITIES.find((x) => x.value === a))
+        .filter((x): x is (typeof ACTIVITIES)[number] => Boolean(x))
+    : [];
 
   async function refresh() {
     setHikes(await listHikesFull());
   }
 
   useEffect(() => {
-    setName(getUserSettings().name);
     refresh();
   }, []);
+
+  function handleLogout() {
+    logout();
+    router.replace("/auth/");
+  }
 
   const loading = hikes === null;
   const list = hikes ?? [];
@@ -40,20 +53,6 @@ export default function ProfilePage() {
   const totalMoving = list.reduce((sum, h) => sum + (h.movingMs ?? h.durationMs), 0);
   const totalElev = list.reduce((sum, h) => sum + h.elevationGainM, 0);
   const avgSpeed = avgSpeedMps(totalDistance, totalMoving);
-
-  function startEditing() {
-    setDraftName(name);
-    setEditing(true);
-  }
-  function saveName() {
-    const next = updateUserName(draftName);
-    setName(next.name);
-    setEditing(false);
-  }
-  function cancelEditing() {
-    setDraftName(name);
-    setEditing(false);
-  }
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -84,40 +83,29 @@ export default function ProfilePage() {
           </div>
         </div>
         <div className="min-w-0 flex-1">
-          {editing ? (
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveName();
-                  if (e.key === "Escape") cancelEditing();
-                }}
-                className="w-full rounded-lg bg-surface px-3 py-1.5 font-display text-2xl font-bold tracking-tight shadow-sm ring-1 ring-app focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Your name"
-              />
-              <button type="button" onClick={saveName} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white">
-                Save
-              </button>
-              <button type="button" onClick={cancelEditing} className="rounded-lg px-2 py-1.5 text-sm text-zinc-500">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={startEditing} className="group flex items-center gap-2 text-left" aria-label="Edit name">
-              <h1 className="truncate font-display text-3xl font-bold tracking-tight">{name}</h1>
-              <svg viewBox="0 0 24 24" className="h-4 w-4 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
-              </svg>
-            </button>
-          )}
+          <h1 className="truncate font-display text-3xl font-bold tracking-tight">
+            @{user?.username ?? name}
+          </h1>
           <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
             {list.length} hike{list.length === 1 ? "" : "s"} · {formatDistance(totalDistance)} total
+            {user?.age != null && <> · {user.age}</>}
           </p>
         </div>
       </header>
+
+      {activityLabels.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-1.5">
+          {activityLabels.map((a) => (
+            <span
+              key={a.value}
+              className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1 text-xs font-semibold shadow-sm ring-1 ring-app"
+            >
+              <span>{a.emoji}</span>
+              <span>{a.label}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <section className="mb-8">
         <div className="mb-3 flex items-baseline justify-between">
@@ -226,6 +214,16 @@ export default function ProfilePage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {user && (
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="mt-10 w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+        >
+          Log out
+        </button>
       )}
     </div>
   );

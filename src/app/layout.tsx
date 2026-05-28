@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { BottomNav } from "@/components/BottomNav";
+import { AppShell } from "@/components/AppShell";
+import { AuthGate } from "@/components/AuthGate";
+import { AuthProvider } from "@/components/AuthProvider";
 import { SyncBootstrap } from "@/components/SyncBootstrap";
 
 const geistSans = Geist({
@@ -43,9 +45,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-app text-zinc-900 dark:text-zinc-100">
-        <SyncBootstrap />
-        <main className="flex flex-1 flex-col">{children}</main>
-        <BottomNav />
+        <AuthProvider>
+          <SyncBootstrap />
+          <AuthGate>
+            <AppShell>{children}</AppShell>
+          </AuthGate>
+        </AuthProvider>
       </body>
     </html>
   );
