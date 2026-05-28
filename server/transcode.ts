@@ -66,8 +66,8 @@ export async function transcodeVideoInBackground(
     try {
       await runFfmpeg([
         "-y",
-        "-ss", String(posterAt),
         "-i", outputPath,
+        "-ss", String(posterAt),
         "-frames:v", "1",
         "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(iw,ih),-2,min(640,ih))'",
         "-q:v", "3",
@@ -154,10 +154,12 @@ export async function generatePosterAt(videoKey: string, time: number): Promise<
     await writeFile(inputPath, await body.transformToByteArray());
 
     const at = Number.isFinite(time) ? Math.max(0, time) : 1;
+    // -ss AFTER -i = accurate (frame-exact) seek. Fast seek snaps to the
+    // nearest keyframe, which can be many seconds off the chosen frame.
     await runFfmpeg([
       "-y",
-      "-ss", String(at),
       "-i", inputPath,
+      "-ss", String(at),
       "-frames:v", "1",
       "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(iw,ih),-2,min(640,ih))'",
       "-q:v", "3",
