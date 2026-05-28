@@ -1,11 +1,12 @@
 import ActivityKit
 import SwiftUI
+import UIKit
 import WidgetKit
 
-// The lock-screen + Dynamic Island UI for an active hike.
-// Add this file (and HikeActivityAttributes.swift) to the widget target.
+// Lock-screen + Dynamic Island UI for an active hike.
+// Uses HikeActivityAttributes — add that shared file to THIS target too.
 // The widget target's min deployment must be iOS 16.2+.
-struct HikeLiveActivity: Widget {
+struct HikeWidgetLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: HikeActivityAttributes.self) { context in
             HikeLockScreenView(state: context.state, title: context.attributes.title)
