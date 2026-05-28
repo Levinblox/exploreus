@@ -25,6 +25,7 @@ export async function transcodeVideoInBackground(
     workDir = await mkdtemp(join(tmpdir(), "trans-"));
     const inputPath = join(workDir, "input");
     const outputPath = join(workDir, "output.mp4");
+    const thumbPath = join(workDir, "thumb.jpg");
 
     // 1. Download original from R2.
     const s3 = getClient();
@@ -54,8 +55,35 @@ export async function transcodeVideoInBackground(
       outputPath,
     ]);
 
-    // 3. Upload optimized version with a new key.
+    // 3. Grab a poster frame ~1s in (avoids the usually-black first frame).
+    //    Best-effort: a thumbnail failure must not lose the transcode result.
     const newKey = originalKey.replace(/\.[^.]+$/, "") + ".mp4";
+    const thumbKey = newKey.replace(/\.[^.]+$/, "") + "_thumb.jpg";
+    let haveThumb = false;
+    try {
+      await runFfmpeg([
+        "-y",
+        "-ss", "1",
+        "-i", outputPath,
+        "-frames:v", "1",
+        "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(iw,ih),-2,min(640,ih))'",
+        "-q:v", "3",
+        thumbPath,
+      ]);
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: thumbKey,
+          Body: await readFile(thumbPath),
+          ContentType: "image/jpeg",
+        })
+      );
+      haveThumb = true;
+    } catch (e) {
+      console.warn("thumbnail generation failed", mediaId, e);
+    }
+
+    // 4. Upload optimized version with a new key.
     const optimized = await readFile(outputPath);
     await s3.send(
       new PutObjectCommand({
@@ -66,18 +94,19 @@ export async function transcodeVideoInBackground(
       })
     );
 
-    // 4. Delete the original if the key actually changed.
+    // 5. Delete the original if the key actually changed.
     if (newKey !== originalKey) {
       await s3
         .send(new DeleteObjectCommand({ Bucket: BUCKET, Key: originalKey }))
         .catch((e) => console.warn("orig delete failed", e));
     }
 
-    // 5. Update DB row.
+    // 6. Update DB row.
     await pool.query(
-      `UPDATE media SET storage_key = $1, content_type = 'video/mp4', size_bytes = $2
-         WHERE id = $3`,
-      [newKey, optimized.length, mediaId]
+      `UPDATE media SET storage_key = $1, content_type = 'video/mp4', size_bytes = $2,
+                        thumb_key = $3
+         WHERE id = $4`,
+      [newKey, optimized.length, haveThumb ? thumbKey : null, mediaId]
     );
 
     console.log(

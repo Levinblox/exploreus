@@ -41,12 +41,18 @@ export async function uploadMedia(
     file = await compressImage(file);
   }
 
+  // R2 signs this content-type into the presigned URL, so the PUT below must
+  // send the exact same value or the signature won't match (403).
+  const contentType = file.type || (kind === "video" ? "video/mp4" : "image/jpeg");
+
   const presigned = await apiFetch<Presigned>("/api/upload/presign", {
     method: "POST",
     body: JSON.stringify({
       kind,
-      contentType: file.type || (kind === "video" ? "video/mp4" : "image/jpeg"),
+      contentType,
       ext: extOf(file),
+      parentKind,
+      parentId,
     }),
   });
 
@@ -54,7 +60,7 @@ export async function uploadMedia(
   const putRes = await fetch(presigned.uploadUrl, {
     method: "PUT",
     body: file,
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": contentType },
   });
   if (!putRes.ok) throw new Error(`R2 upload failed: ${putRes.status}`);
 
@@ -66,7 +72,7 @@ export async function uploadMedia(
       parentId,
       kind,
       storageKey: presigned.key,
-      contentType: file.type,
+      contentType,
       sizeBytes: file.size,
     }),
   });
@@ -76,7 +82,7 @@ export async function uploadMedia(
     kind,
     storageKey: presigned.key,
     url: presigned.publicUrl,
-    contentType: file.type,
+    contentType,
     sizeBytes: file.size,
     createdAt: new Date().toISOString(),
   };

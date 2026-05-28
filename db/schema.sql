@@ -73,10 +73,13 @@ CREATE TABLE IF NOT EXISTS media (
   parent_id     TEXT NOT NULL,
   kind          TEXT NOT NULL CHECK (kind IN ('photo', 'video')),
   storage_key   TEXT NOT NULL,
+  thumb_key     TEXT,
   content_type  TEXT,
   caption       TEXT,
   size_bytes    BIGINT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Poster frame for videos, generated server-side during transcode.
+ALTER TABLE media ADD COLUMN IF NOT EXISTS thumb_key TEXT;
 CREATE INDEX IF NOT EXISTS media_parent_idx ON media(parent_kind, parent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS media_user_idx ON media(user_id, created_at DESC);

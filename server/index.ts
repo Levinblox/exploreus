@@ -34,6 +34,9 @@ function uid(c: any): string {
   return c.get("userId");
 }
 
+// Cap on photos+videos attached to a single hike/trail.
+const MAX_MEDIA_PER_PARENT = 10;
+
 app.get("/", (c) => c.text("Exploreus API"));
 
 // ───────── settings ─────────
@@ -222,9 +225,26 @@ app.post("/api/upload/presign", async (c) => {
     kind: "photo" | "video";
     contentType: string;
     ext?: string;
+    parentKind?: "user_trail" | "hike";
+    parentId?: string;
   };
   if (!["photo", "video"].includes(body.kind)) {
     return c.json({ error: "bad kind" }, 400);
+  }
+  // Cap media per hike/trail. Checked here so we reject before the client
+  // wastes bandwidth uploading an object we'd then orphan.
+  if (body.parentKind && body.parentId) {
+    const { rows } = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM media
+        WHERE user_id = $1 AND parent_kind = $2 AND parent_id = $3`,
+      [uid(c), body.parentKind, body.parentId]
+    );
+    if (Number(rows[0]?.count ?? 0) >= MAX_MEDIA_PER_PARENT) {
+      return c.json(
+        { error: `Up to ${MAX_MEDIA_PER_PARENT} photos or videos per hike.` },
+        409
+      );
+    }
   }
   const ext = (body.ext ?? "").replace(/[^a-z0-9]/gi, "").slice(0, 5);
   const id = crypto.randomUUID();
@@ -285,7 +305,7 @@ app.get("/api/media", async (c) => {
     return c.json({ error: "parentKind and parentId required" }, 400);
   }
   const { rows } = await pool.query(
-    `SELECT id, kind, storage_key, content_type, caption, size_bytes, created_at
+    `SELECT id, kind, storage_key, thumb_key, content_type, caption, size_bytes, created_at
        FROM media
       WHERE parent_kind = $1 AND parent_id = $2
       ORDER BY created_at ASC`,
@@ -297,6 +317,7 @@ app.get("/api/media", async (c) => {
       kind: r.kind,
       storageKey: r.storage_key,
       url: publicUrlFor(r.storage_key),
+      posterUrl: r.thumb_key ? publicUrlFor(r.thumb_key) : null,
       contentType: r.content_type,
       caption: r.caption,
       sizeBytes: r.size_bytes != null ? Number(r.size_bytes) : null,
@@ -308,18 +329,20 @@ app.get("/api/media", async (c) => {
 app.delete("/api/media/:id", async (c) => {
   const id = c.req.param("id");
   const { rows } = await pool.query(
-    `SELECT storage_key FROM media WHERE user_id = $1 AND id = $2`,
+    `SELECT storage_key, thumb_key FROM media WHERE user_id = $1 AND id = $2`,
     [uid(c), id]
   );
   if (rows.length === 0) return c.json({ error: "not found" }, 404);
-  const key = rows[0].storage_key as string;
-  // Best-effort R2 delete — if it fails the row is still removed; orphans can
-  // be GC'd later.
+  // Best-effort R2 delete of the file and its poster — if it fails the row is
+  // still removed; orphans can be GC'd later.
   if (hasR2()) {
-    try {
-      await deleteObject(key);
-    } catch (e) {
-      console.warn("r2 delete failed", key, e);
+    const keys = [rows[0].storage_key, rows[0].thumb_key].filter(Boolean) as string[];
+    for (const key of keys) {
+      try {
+        await deleteObject(key);
+      } catch (e) {
+        console.warn("r2 delete failed", key, e);
+      }
     }
   }
   await pool.query(`DELETE FROM media WHERE user_id = $1 AND id = $2`, [uid(c), id]);

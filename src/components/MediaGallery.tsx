@@ -12,6 +12,9 @@ type Props = {
   canUpload?: boolean;
 };
 
+// Keep in sync with MAX_MEDIA_PER_PARENT on the server.
+const MAX_ITEMS = 10;
+
 export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) {
   const [items, setItems] = useState<Media[] | null>(null);
   const [uploading, setUploading] = useState(0);
@@ -32,9 +35,19 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
   async function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setError(null);
-    setUploading(files.length);
+    const remaining = MAX_ITEMS - (items?.length ?? 0);
+    if (remaining <= 0) {
+      setError(`You've reached the ${MAX_ITEMS}-item limit for this hike.`);
+      return;
+    }
+    let toUpload = Array.from(files);
+    if (toUpload.length > remaining) {
+      toUpload = toUpload.slice(0, remaining);
+      setError(`Only ${remaining} more allowed — uploading the first ${remaining}.`);
+    }
+    setUploading(toUpload.length);
     const uploaded: Media[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of toUpload) {
       try {
         const m = await uploadMedia(parentKind, parentId, file);
         uploaded.push(m);
@@ -68,6 +81,9 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
   const showEmpty = items != null && items.length === 0 && !canUpload;
   if (showEmpty) return null;
 
+  const count = items?.length ?? 0;
+  const atCap = count >= MAX_ITEMS;
+
   return (
     <div>
       {items == null ? (
@@ -91,13 +107,20 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
             >
               {m.kind === "video" ? (
                 <>
-                  <video
-                    src={m.url}
-                    className="h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
+                  {m.posterUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={m.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    /* No poster yet (transcode still running) — seek past the
+                       usually-black first frame as a stopgap. */
+                    <video
+                      src={m.url + "#t=0.5"}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  )}
                   <span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                     ▶
                   </span>
@@ -111,12 +134,16 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
         </div>
       )}
 
-      {canUpload && (
+      {canUpload && atCap ? (
+        <p className="mt-3 text-center text-xs text-zinc-500 dark:text-zinc-400">
+          {MAX_ITEMS}-item limit reached. Delete one to add more.
+        </p>
+      ) : canUpload ? (
         <label className="mt-3 flex h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm active:scale-[0.98] disabled:opacity-60">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          {uploading > 0 ? `Uploading ${uploading}…` : "Add photos or video"}
+          {uploading > 0 ? `Uploading ${uploading}…` : `Add photos or video (${count}/${MAX_ITEMS})`}
           <input
             type="file"
             accept="image/*,video/*"
@@ -128,7 +155,7 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
             }}
           />
         </label>
-      )}
+      ) : null}
 
       {error && (
         <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>
@@ -164,7 +191,7 @@ function Lightbox({
       />
       <div className="relative max-h-full max-w-full">
         {item.kind === "video" ? (
-          <video src={item.url} controls autoPlay playsInline className="max-h-[85vh] max-w-full rounded-xl" />
+          <video src={item.url} poster={item.posterUrl ?? undefined} controls autoPlay playsInline className="max-h-[85vh] max-w-full rounded-xl" />
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={item.url} alt="" className="max-h-[85vh] max-w-full rounded-xl object-contain" />

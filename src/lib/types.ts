@@ -46,6 +46,8 @@ export type Media = {
   kind: "photo" | "video";
   storageKey: string;
   url: string;
+  /** Poster frame for videos (generated server-side). Null until transcode finishes. */
+  posterUrl?: string | null;
   contentType?: string | null;
   caption?: string | null;
   sizeBytes?: number | null;
