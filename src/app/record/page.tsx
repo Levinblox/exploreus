@@ -19,6 +19,12 @@ import {
 } from "@/lib/geo";
 import { listHikesFull, saveHike } from "@/lib/hikes";
 import { getTrail } from "@/lib/trails";
+import {
+  startHikeActivity,
+  updateHikeActivity,
+  endHikeActivity,
+  type LiveActivityUpdate,
+} from "@/lib/liveActivity";
 import type { GeoPoint, Hike, Trail } from "@/lib/types";
 
 type Status = "idle" | "recording" | "paused";
@@ -103,6 +109,36 @@ function RecordInner() {
           ? pauseStartRef.current
           : now) - startedAt - pausedMs
       : 0;
+
+  // Latest stats for the iOS Live Activity. Kept in a ref so the push interval
+  // below always reads current values without re-subscribing each second.
+  const liveRef = useRef<LiveActivityUpdate | null>(null);
+  liveRef.current = {
+    elapsed: formatDuration(durationMs),
+    distance: formatDistance(distanceM),
+    remaining: progress ? formatDistance(progress.remainingM) : undefined,
+    progress: progress?.fraction ?? 0,
+    track: points.map((p) => ({ lat: p.lat, lng: p.lng })),
+    current: userLoc ? { lat: userLoc.lat, lng: userLoc.lng } : undefined,
+  };
+
+  // Drive the lock-screen Live Activity for the length of a hike session.
+  // iOS throttles updates, so we push every ~7s (no-op off iOS).
+  const sessionActive = status !== "idle";
+  const followName = followTrail?.name;
+  useEffect(() => {
+    if (!sessionActive) return;
+    void startHikeActivity(followName ?? "Hike");
+    const push = () => {
+      if (liveRef.current) void updateHikeActivity(liveRef.current);
+    };
+    push();
+    const id = setInterval(push, 7000);
+    return () => {
+      clearInterval(id);
+      void endHikeActivity();
+    };
+  }, [sessionActive, followName]);
 
   // Location source: either real GPS or the fake walker.
   useEffect(() => {
