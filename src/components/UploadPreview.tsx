@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   files: File[];
@@ -29,7 +30,10 @@ export function UploadPreview({ files, onCancel, onConfirm }: Props) {
   const [busy, setBusy] = useState(false);
   const hasVideo = entries.some((e) => e.isVideo);
 
-  return (
+  if (typeof document === "undefined") return null;
+  // Portal to <body> so the overlay escapes any transformed ancestor (the map)
+  // and truly covers the viewport instead of being clipped inside it.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col items-center bg-black">
       <div className="flex w-full max-w-md items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 text-white">
         <button type="button" onClick={onCancel} disabled={busy} className="text-sm font-medium text-white/80">
@@ -81,6 +85,7 @@ export function UploadPreview({ files, onCancel, onConfirm }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

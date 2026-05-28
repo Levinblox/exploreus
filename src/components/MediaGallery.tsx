@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { hasApi } from "@/lib/api";
 import { deleteMedia, listMedia, setCover, uploadMedia } from "@/lib/media";
 import type { Media, MediaParentKind } from "@/lib/types";
@@ -253,7 +254,10 @@ function Lightbox({
     }
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+  // Portal to <body> so the overlay escapes any transformed ancestor (the map)
+  // and covers the whole viewport.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
       onClick={onClose}
@@ -300,16 +304,22 @@ function Lightbox({
         )}
 
         {onSetCover && item.kind === "video" && (
-          <button
-            type="button"
-            onClick={saveCover}
-            disabled={coverState === "saving"}
-            className="absolute bottom-14 right-2 z-10 rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-lg active:scale-95 disabled:opacity-70"
-          >
-            {coverState === "saving" ? "Saving…" : coverState === "done" ? "Cover set ✓" : "Set as cover"}
-          </button>
+          <>
+            <p className="pointer-events-none absolute bottom-28 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/55 px-3 py-1 text-[11px] font-medium text-white backdrop-blur">
+              Drag the video to your cover frame
+            </p>
+            <button
+              type="button"
+              onClick={saveCover}
+              disabled={coverState === "saving"}
+              className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-lg active:scale-95 disabled:opacity-70"
+            >
+              {coverState === "saving" ? "Saving…" : coverState === "done" ? "Cover set ✓" : "Set as cover"}
+            </button>
+          </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
