@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { hasApi } from "@/lib/api";
 import { deleteMedia, listMedia, setCover, uploadMedia } from "@/lib/media";
 import type { Media, MediaParentKind } from "@/lib/types";
-import { UploadPreview, type UploadItem } from "./UploadPreview";
+import { UploadPreview } from "./UploadPreview";
 
 type Props = {
   parentKind: MediaParentKind;
@@ -51,14 +51,15 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
     setPending(chosen);
   }
 
-  // Confirmed from the preview: upload each file with its chosen cover time.
-  async function runUpload(toUpload: UploadItem[]) {
+  // Confirmed from the preview: upload each file. Video covers are auto-cut
+  // server-side and can be changed afterward via the viewer.
+  async function runUpload(toUpload: File[]) {
     setPending(null);
     setUploading(toUpload.length);
     const uploaded: Media[] = [];
-    for (const { file, posterTime } of toUpload) {
+    for (const file of toUpload) {
       try {
-        const m = await uploadMedia(parentKind, parentId, file, posterTime);
+        const m = await uploadMedia(parentKind, parentId, file);
         uploaded.push(m);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
