@@ -47,3 +47,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 }
+
+// Capacitor doesn't auto-discover plugins defined in the app target, so we
+// register the Live Activity plugin explicitly once the bridge is ready.
+// Main.storyboard's view controller class points here.
+class MainViewController: CAPBridgeViewController {
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(LiveActivityPlugin())
+    }
+}
