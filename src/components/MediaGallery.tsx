@@ -121,7 +121,6 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
             type="file"
             accept="image/*,video/*"
             multiple
-            capture="environment"
             className="sr-only"
             onChange={(e) => {
               onFiles(e.target.files);

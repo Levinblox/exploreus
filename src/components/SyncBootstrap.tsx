@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect } from "react";
-import { apiFetch, hasApi, tryApi } from "@/lib/api";
-import { listHikesFullLocal } from "@/lib/storage";
+import { apiFetch, getAuthToken, hasApi, tryApi } from "@/lib/api";
 import { replaceLocalUserTrails } from "@/lib/userTrails";
 import { replaceLocalSettings, type MapStyle } from "@/lib/userSettings";
-import type { Hike, Trail } from "@/lib/types";
+import type { Trail } from "@/lib/types";
 
-// Runs once on mount. Pushes anything in localStorage up to the API (idempotent
-// upserts) then pulls the canonical state down to keep the cache fresh.
-// If the API is unreachable the app keeps working in local-only mode.
+// The server is the source of truth. This pulls canonical trail + settings
+// state into the local cache (which drives the synchronous reads in
+// userTrails/userSettings). It deliberately does NOT push local hikes — doing
+// so on every launch resurrected deletes, because a stale localStorage copy
+// would re-upload a hike another device had already removed. Hikes are written
+// straight to the server on save/delete and read fresh via listHikes().
 export function SyncBootstrap() {
   useEffect(() => {
-    if (!hasApi()) return;
+    if (!hasApi() || !getAuthToken()) return;
     void run();
   }, []);
   return null;
@@ -24,16 +26,6 @@ async function run() {
   if (started) return;
   started = true;
 
-  // 1. Push local hikes to the server (POST is upsert).
-  const localHikes = listHikesFullLocal();
-  for (const h of localHikes) {
-    await tryApi(
-      () => apiFetch("/api/hikes", { method: "POST", body: JSON.stringify(h) }),
-      undefined
-    );
-  }
-
-  // 2. Pull canonical data and update the local caches that drive sync reads.
   const trails = await tryApi<Trail[] | null>(
     () => apiFetch<Trail[]>("/api/user-trails"),
     null
@@ -45,7 +37,4 @@ async function run() {
     null
   );
   if (settings) replaceLocalSettings(settings);
-
-  // Hikes are read async via listHikes()/getHike() so they pull fresh on demand —
-  // no need to mirror server state into the hike cache here.
 }

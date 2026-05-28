@@ -2,7 +2,7 @@ import "./env.js"; // MUST be first — loads .env.local before db.js etc.
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { ensureUser, pool } from "./db.js";
+import { pool } from "./db.js";
 import { deleteObject, hasR2, presignPutUrl, publicUrlFor } from "./r2.js";
 import { transcodeVideoInBackground } from "./transcode.js";
 import { auth, requireUser } from "./auth.js";
@@ -17,21 +17,12 @@ app.use(
 // Auth router — /api/auth/signup, /api/auth/login, /api/auth/me.
 app.route("/api/auth", auth);
 
-// Middleware for the rest of /api/*: prefer JWT, fall back to X-Device-Id so
-// the app keeps working before signup. Anonymous device users get a row
-// transparently; signup later upgrades it in place.
+// Middleware for the rest of /api/*: require a valid JWT. The anonymous
+// X-Device-Id path was removed once accounts existed — it let stale clients
+// create orphan users and resurrect deleted data.
 app.use("/api/*", async (c, next) => {
   // /api/auth/* is handled by the auth router above — never reaches here.
-  const authHeader = c.req.header("Authorization");
-  let userId: string | null = await requireUser(authHeader);
-
-  if (!userId) {
-    const deviceId = c.req.header("X-Device-Id");
-    if (deviceId && deviceId.length >= 8) {
-      userId = await ensureUser(deviceId);
-    }
-  }
-
+  const userId = await requireUser(c.req.header("Authorization"));
   if (!userId) {
     return c.json({ error: "Unauthorized" }, 401);
   }

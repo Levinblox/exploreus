@@ -55,6 +55,14 @@
 	<string>Exploreus keeps recording your hike even when the screen is off so the track stays accurate.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Exploreus uses motion data to detect when you stop and start moving during a hike.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Exploreus uses the camera so you can add photos and videos of a trail.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Exploreus needs access to your photo library so you can add photos and videos of a trail.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Exploreus saves photos you capture to your library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Exploreus uses the microphone to record audio when you capture a trail video.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { hasApi, getAuthToken } from "@/lib/api";
 import { loadMe, logout as doLogout, type AuthUser } from "@/lib/auth";
+import { clearHikesLocal } from "@/lib/storage";
 
 type AuthState = {
   user: AuthUser | null;
@@ -53,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     doLogout();
+    // Drop the local hike cache so the next account doesn't inherit it.
+    clearHikesLocal();
     setUser(null);
   }
 

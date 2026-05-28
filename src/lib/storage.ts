@@ -57,3 +57,8 @@ export function getHikeLocal(id: string): Hike | null {
 export function deleteHikeLocal(id: string): void {
   writeAll(readAll().filter((h) => h.id !== id));
 }
+
+export function clearHikesLocal(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(KEY);
+}
