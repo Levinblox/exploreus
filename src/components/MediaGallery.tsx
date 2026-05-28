@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { hasApi } from "@/lib/api";
 import { deleteMedia, listMedia, uploadMedia } from "@/lib/media";
 import type { Media, MediaParentKind } from "@/lib/types";
+import { UploadPreview, type UploadItem } from "./UploadPreview";
 
 type Props = {
   parentKind: MediaParentKind;
@@ -20,6 +21,7 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<Media | null>(null);
+  const [pending, setPending] = useState<File[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +34,8 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
     };
   }, [parentKind, parentId]);
 
-  async function onFiles(files: FileList | null) {
+  // Pick files → open the preview sheet (where the user picks video covers).
+  function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setError(null);
     const remaining = MAX_ITEMS - (items?.length ?? 0);
@@ -40,16 +43,22 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
       setError(`You've reached the ${MAX_ITEMS}-item limit for this hike.`);
       return;
     }
-    let toUpload = Array.from(files);
-    if (toUpload.length > remaining) {
-      toUpload = toUpload.slice(0, remaining);
-      setError(`Only ${remaining} more allowed — uploading the first ${remaining}.`);
+    let chosen = Array.from(files);
+    if (chosen.length > remaining) {
+      chosen = chosen.slice(0, remaining);
+      setError(`Only ${remaining} more allowed — keeping the first ${remaining}.`);
     }
+    setPending(chosen);
+  }
+
+  // Confirmed from the preview: upload each file with its chosen cover.
+  async function runUpload(toUpload: UploadItem[]) {
+    setPending(null);
     setUploading(toUpload.length);
     const uploaded: Media[] = [];
-    for (const file of toUpload) {
+    for (const { file, poster } of toUpload) {
       try {
-        const m = await uploadMedia(parentKind, parentId, file);
+        const m = await uploadMedia(parentKind, parentId, file, poster);
         uploaded.push(m);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
@@ -99,15 +108,13 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {items.map((m) => (
-            <button
+            <div
               key={m.id}
-              type="button"
-              onClick={() => setLightbox(m)}
               className="relative aspect-square overflow-hidden rounded-xl bg-zinc-200 dark:bg-zinc-800"
             >
-              {m.kind === "video" ? (
-                <>
-                  {m.posterUrl ? (
+              <button type="button" onClick={() => setLightbox(m)} className="absolute inset-0 h-full w-full">
+                {m.kind === "video" ? (
+                  m.posterUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={m.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                   ) : (
@@ -120,16 +127,30 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
                       playsInline
                       preload="metadata"
                     />
-                  )}
-                  <span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    ▶
-                  </span>
-                </>
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={m.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  )
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={m.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                )}
+              </button>
+              {m.kind === "video" && (
+                <span className="pointer-events-none absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  ▶
+                </span>
               )}
-            </button>
+              {canUpload && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(m)}
+                  aria-label={`Delete ${m.kind}`}
+                  className="absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur active:scale-95"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+                  </svg>
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -166,6 +187,14 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
           item={lightbox}
           onClose={() => setLightbox(null)}
           onDelete={canUpload ? () => { onDelete(lightbox); setLightbox(null); } : undefined}
+        />
+      )}
+
+      {pending && (
+        <UploadPreview
+          files={pending}
+          onCancel={() => setPending(null)}
+          onConfirm={runUpload}
         />
       )}
     </div>
