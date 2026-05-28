@@ -266,7 +266,7 @@ app.post("/api/media", async (c) => {
     parentId: string;
     kind: "photo" | "video";
     storageKey: string;
-    thumbStorageKey?: string | null;
+    posterTime?: number | null;
     contentType?: string;
     caption?: string;
     sizeBytes?: number;
@@ -276,8 +276,8 @@ app.post("/api/media", async (c) => {
   }
   await pool.query(
     `INSERT INTO media (id, user_id, parent_kind, parent_id, kind,
-                        storage_key, thumb_key, content_type, caption, size_bytes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+                        storage_key, content_type, caption, size_bytes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [
       m.id,
       uid(c),
@@ -285,18 +285,17 @@ app.post("/api/media", async (c) => {
       m.parentId,
       m.kind,
       m.storageKey,
-      m.thumbStorageKey ?? null,
       m.contentType ?? null,
       m.caption ?? null,
       m.sizeBytes ?? null,
     ]
   );
   // Videos: re-encode in the background so we end up with a 1080p H.264 file
-  // regardless of what the device shot in. Response returns immediately. If the
-  // client already supplied a cover frame, the transcode keeps it.
+  // regardless of what the device shot in, and cut the cover frame at the
+  // timestamp the user picked. Response returns immediately.
   if (m.kind === "video" && hasR2()) {
     void transcodeVideoInBackground(m.id, m.storageKey, {
-      skipThumb: Boolean(m.thumbStorageKey),
+      posterTime: m.posterTime ?? undefined,
     });
   }
   return c.json({ ok: true });

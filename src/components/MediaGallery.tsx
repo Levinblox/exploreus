@@ -51,14 +51,14 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
     setPending(chosen);
   }
 
-  // Confirmed from the preview: upload each file with its chosen cover.
+  // Confirmed from the preview: upload each file with its chosen cover time.
   async function runUpload(toUpload: UploadItem[]) {
     setPending(null);
     setUploading(toUpload.length);
     const uploaded: Media[] = [];
-    for (const { file, poster } of toUpload) {
+    for (const { file, posterTime } of toUpload) {
       try {
-        const m = await uploadMedia(parentKind, parentId, file, poster);
+        const m = await uploadMedia(parentKind, parentId, file, posterTime);
         uploaded.push(m);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
@@ -67,6 +67,21 @@ export function MediaGallery({ parentKind, parentId, canUpload = true }: Props) 
       }
     }
     setItems((prev) => [...(prev ?? []), ...uploaded]);
+    // Covers are cut server-side during transcode; poll briefly so they
+    // appear without the user having to leave and return to the hike.
+    if (uploaded.some((m) => m.kind === "video")) pollForPosters();
+  }
+
+  function pollForPosters() {
+    let tries = 0;
+    const tick = async () => {
+      tries++;
+      const fresh = await listMedia(parentKind, parentId).catch(() => null);
+      if (fresh) setItems(fresh);
+      const missing = fresh?.some((m) => m.kind === "video" && !m.posterUrl) ?? false;
+      if (missing && tries < 8) setTimeout(tick, 3000);
+    };
+    setTimeout(tick, 3000);
   }
 
   async function onDelete(m: Media) {
@@ -211,38 +226,50 @@ function Lightbox({
   onDelete?: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute inset-0"
-        aria-label="Close"
-      />
-      <div className="relative max-h-full max-w-full">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      {/* Contained card so portrait/landscape media both sit neatly. */}
+      <div
+        className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-black shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {item.kind === "video" ? (
-          <video src={item.url} poster={item.posterUrl ?? undefined} controls autoPlay playsInline className="max-h-[85vh] max-w-full rounded-xl" />
+          <video
+            src={item.url}
+            poster={item.posterUrl ?? undefined}
+            controls
+            autoPlay
+            playsInline
+            className="max-h-[75vh] w-full bg-black object-contain"
+          />
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={item.url} alt="" className="max-h-[85vh] max-w-full rounded-xl object-contain" />
+          <img src={item.url} alt="" className="max-h-[75vh] w-full bg-black object-contain" />
         )}
-      </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-zinc-900 shadow-lg"
-        aria-label="Close"
-      >
-        ✕
-      </button>
-      {onDelete && (
+
         <button
           type="button"
-          onClick={onDelete}
-          className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-10 rounded-full bg-red-600/95 px-3 py-2 text-xs font-semibold text-white shadow-lg"
+          onClick={onClose}
+          className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur active:scale-95"
+          aria-label="Close"
         >
-          Delete
+          ✕
         </button>
-      )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="absolute left-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur active:scale-95"
+            aria-label={`Delete ${item.kind}`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

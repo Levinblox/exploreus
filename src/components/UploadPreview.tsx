@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { captureFrame, seekTo } from "@/lib/videoPoster";
 
-export type UploadItem = { file: File; poster: File | null };
+export type UploadItem = { file: File; posterTime: number | null };
 
 type Props = {
   files: File[];
@@ -30,25 +29,15 @@ export function UploadPreview({ files, onCancel, onConfirm }: Props) {
   }, [entries]);
 
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
-  const [durations, setDurations] = useState<Record<number, number>>({});
-  const [times, setTimes] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
 
-  async function confirm() {
+  function confirm() {
     setBusy(true);
-    const items: UploadItem[] = [];
-    for (let i = 0; i < entries.length; i++) {
-      const e = entries[i];
-      let poster: File | null = null;
-      if (e.isVideo) {
-        const v = videoRefs.current[i];
-        if (v) {
-          await seekTo(v, v.currentTime); // ensure the chosen frame is decoded
-          poster = await captureFrame(v);
-        }
-      }
-      items.push({ file: e.file, poster });
-    }
+    const items: UploadItem[] = entries.map((e, i) => ({
+      file: e.file,
+      // Whatever frame the native player is paused on becomes the cover.
+      posterTime: e.isVideo ? videoRefs.current[i]?.currentTime ?? null : null,
+    }));
     onConfirm(items);
   }
 
@@ -75,46 +64,27 @@ export function UploadPreview({ files, onCancel, onConfirm }: Props) {
         {entries.map((e, i) => (
           <div key={i} className="overflow-hidden rounded-2xl bg-zinc-900">
             {e.isVideo ? (
-              <div>
+              <>
                 <video
                   ref={(el) => {
                     videoRefs.current[i] = el;
                   }}
                   src={e.url}
+                  controls
                   muted
                   playsInline
-                  preload="auto"
-                  className="max-h-[55vh] w-full bg-black object-contain"
+                  preload="metadata"
+                  className="max-h-[60vh] w-full bg-black object-contain"
                   onLoadedMetadata={(ev) => {
-                    const v = ev.currentTarget;
-                    const dur = v.duration || 0;
                     // Default cover ~1s in (or 10% for very short clips).
-                    const t = Math.min(1, (dur || 1) * 0.1);
-                    setDurations((d) => ({ ...d, [i]: dur }));
-                    setTimes((s) => ({ ...s, [i]: t }));
-                    seekTo(v, t);
+                    const v = ev.currentTarget;
+                    v.currentTime = Math.min(1, (v.duration || 1) * 0.1);
                   }}
                 />
-                <div className="px-3 py-3">
-                  <label className="mb-1 block text-xs font-medium text-white/70">
-                    Drag to choose cover
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={durations[i] || 0}
-                    step={0.05}
-                    value={times[i] ?? 0}
-                    onChange={(ev) => {
-                      const t = Number(ev.target.value);
-                      setTimes((s) => ({ ...s, [i]: t }));
-                      const v = videoRefs.current[i];
-                      if (v) seekTo(v, t);
-                    }}
-                    className="w-full accent-emerald-500"
-                  />
-                </div>
-              </div>
+                <p className="px-3 py-2.5 text-xs text-white/70">
+                  Scrub to the frame you want — that becomes the cover.
+                </p>
+              </>
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={e.url} alt="" className="max-h-[60vh] w-full object-contain" />

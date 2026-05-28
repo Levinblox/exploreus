@@ -19,7 +19,7 @@ import { pool } from "./db.js";
 export async function transcodeVideoInBackground(
   mediaId: string,
   originalKey: string,
-  opts: { skipThumb?: boolean } = {}
+  opts: { posterTime?: number } = {}
 ): Promise<void> {
   let workDir: string | null = null;
   try {
@@ -56,35 +56,34 @@ export async function transcodeVideoInBackground(
       outputPath,
     ]);
 
-    // 3. Grab a poster frame ~1s in (avoids the usually-black first frame),
-    //    unless the client already supplied a chosen cover. Best-effort: a
-    //    thumbnail failure must not lose the transcode result.
+    // 3. Cut the poster frame at the timestamp the user picked (default ~1s,
+    //    which avoids the usually-black first frame). Best-effort: a thumbnail
+    //    failure must not lose the transcode result.
     const newKey = originalKey.replace(/\.[^.]+$/, "") + ".mp4";
     const thumbKey = newKey.replace(/\.[^.]+$/, "") + "_thumb.jpg";
+    const posterAt = Number.isFinite(opts.posterTime) ? Math.max(0, opts.posterTime!) : 1;
     let haveThumb = false;
-    if (!opts.skipThumb) {
-      try {
-        await runFfmpeg([
-          "-y",
-          "-ss", "1",
-          "-i", outputPath,
-          "-frames:v", "1",
-          "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(iw,ih),-2,min(640,ih))'",
-          "-q:v", "3",
-          thumbPath,
-        ]);
-        await s3.send(
-          new PutObjectCommand({
-            Bucket: BUCKET,
-            Key: thumbKey,
-            Body: await readFile(thumbPath),
-            ContentType: "image/jpeg",
-          })
-        );
-        haveThumb = true;
-      } catch (e) {
-        console.warn("thumbnail generation failed", mediaId, e);
-      }
+    try {
+      await runFfmpeg([
+        "-y",
+        "-ss", String(posterAt),
+        "-i", outputPath,
+        "-frames:v", "1",
+        "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(iw,ih),-2,min(640,ih))'",
+        "-q:v", "3",
+        thumbPath,
+      ]);
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: thumbKey,
+          Body: await readFile(thumbPath),
+          ContentType: "image/jpeg",
+        })
+      );
+      haveThumb = true;
+    } catch (e) {
+      console.warn("thumbnail generation failed", mediaId, e);
     }
 
     // 4. Upload optimized version with a new key.
@@ -105,10 +104,10 @@ export async function transcodeVideoInBackground(
         .catch((e) => console.warn("orig delete failed", e));
     }
 
-    // 6. Update DB row. COALESCE keeps a client-supplied cover if we made none.
+    // 6. Update DB row.
     await pool.query(
       `UPDATE media SET storage_key = $1, content_type = 'video/mp4', size_bytes = $2,
-                        thumb_key = COALESCE($3, thumb_key)
+                        thumb_key = $3
          WHERE id = $4`,
       [newKey, optimized.length, haveThumb ? thumbKey : null, mediaId]
     );
