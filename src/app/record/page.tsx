@@ -16,7 +16,7 @@ import {
   movingTime,
   totalDistanceM,
 } from "@/lib/geo";
-import { saveHike } from "@/lib/hikes";
+import { listHikesFull, saveHike } from "@/lib/hikes";
 import type { GeoPoint, Hike } from "@/lib/types";
 
 type Status = "idle" | "recording" | "paused";
@@ -55,6 +55,7 @@ export default function RecordPage() {
   const lastLocRef = useRef<UserLoc | null>(null);
   const lastCompassTickRef = useRef(0);
   const [compassHeading, setCompassHeading] = useState<number | null>(null);
+  const [pastTracks, setPastTracks] = useState<GeoPoint[][]>([]);
 
   const distanceM = totalDistanceM(points);
   const elevationM = elevationGainM(points);
@@ -173,6 +174,23 @@ export default function RecordPage() {
     return () => clearInterval(t);
   }, [status]);
 
+  // Pull past hikes once so we can render them as a faint underlay. Refreshed
+  // when a recording finishes and the route changes away.
+  useEffect(() => {
+    let cancelled = false;
+    listHikesFull().then((hikes) => {
+      if (cancelled) return;
+      setPastTracks(
+        hikes
+          .filter((h) => h.points.length > 1)
+          .map((h) => h.points)
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Compass — magnetometer-based facing direction. Updates 10×/sec max.
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -268,8 +286,9 @@ export default function RecordPage() {
         points={points}
         userLocation={userLoc}
         compassHeading={compassHeading}
+        backgroundTracks={pastTracks}
         follow={true}
-        showStyleControl={false}
+        styleControlPosition="top-left-offset"
         className="absolute inset-0"
       />
 

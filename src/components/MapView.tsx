@@ -32,8 +32,12 @@ type Props = {
   showDirection?: boolean;
   arrowVariant?: ArrowVariant;
   arrowSpacing?: number;
+  /** Past hikes / other tracks to render as a faint underlay. */
+  backgroundTracks?: GeoPoint[][];
   mapStyle?: MapStyle;
   showStyleControl?: boolean;
+  /** Where the map-style picker button sits. */
+  styleControlPosition?: "bottom-left" | "top-left-offset";
   className?: string;
 };
 
@@ -55,8 +59,10 @@ export function MapView({
   showDirection = false,
   arrowVariant = "double-chevron",
   arrowSpacing = 70,
+  backgroundTracks,
   mapStyle,
   showStyleControl = true,
+  styleControlPosition = "bottom-left",
   className,
 }: Props) {
   const [internalStyle, setInternalStyle] = useState<MapStyle>(() => {
@@ -91,6 +97,20 @@ export function MapView({
     }),
     [points]
   );
+
+  const backgroundGeoJson = useMemo(() => {
+    if (!backgroundTracks || backgroundTracks.length === 0) return null;
+    return {
+      type: "Feature" as const,
+      properties: {},
+      geometry: {
+        type: "MultiLineString" as const,
+        coordinates: backgroundTracks
+          .filter((t) => t.length > 1)
+          .map((t) => t.map((p) => [p.lng, p.lat])),
+      },
+    };
+  }, [backgroundTracks]);
 
   useEffect(() => {
     if (!userLocation || !mapRef.current) return;
@@ -236,6 +256,20 @@ export function MapView({
         attributionControl={false}
         onLoad={handleLoad}
       >
+        {backgroundGeoJson && (
+          <Source id="bg-tracks" type="geojson" data={backgroundGeoJson}>
+            <Layer
+              id="bg-tracks-line"
+              type="line"
+              paint={{
+                "line-color": "#71717a",
+                "line-width": 3,
+                "line-opacity": 0.45,
+              }}
+              layout={{ "line-cap": "round", "line-join": "round" }}
+            />
+          </Source>
+        )}
         {points.length > 1 && (
           <Source id="track" type="geojson" data={lineGeoJson}>
             <Layer
@@ -287,7 +321,16 @@ export function MapView({
         <button
           type="button"
           onClick={cycleStyle}
-          className="absolute bottom-5 left-4 z-10 flex h-12 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 font-display text-xs font-bold uppercase tracking-wider text-zinc-900 shadow-xl ring-1 ring-black/5 active:scale-95 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-white/10"
+          className={
+            styleControlPosition === "top-left-offset"
+              ? "pointer-events-auto absolute left-4 z-10 flex h-10 items-center gap-1.5 rounded-full bg-white pl-2.5 pr-3.5 font-display text-xs font-bold uppercase tracking-wider text-zinc-900 shadow-lg ring-1 ring-black/5 active:scale-95 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-white/10"
+              : "absolute bottom-5 left-4 z-10 flex h-12 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 font-display text-xs font-bold uppercase tracking-wider text-zinc-900 shadow-xl ring-1 ring-black/5 active:scale-95 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-white/10"
+          }
+          style={
+            styleControlPosition === "top-left-offset"
+              ? { top: "calc(env(safe-area-inset-top) + 4rem)" }
+              : undefined
+          }
           aria-label={`Map style: ${STYLE_LABEL[effectiveStyle]}. Tap to change.`}
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
