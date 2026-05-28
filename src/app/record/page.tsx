@@ -129,7 +129,11 @@ function RecordInner() {
   const followName = followTrail?.name;
   useEffect(() => {
     if (!sessionActive) return;
-    startHikeActivity(followName ?? "Hike").then(setLiveStatus);
+    startHikeActivity(followName ?? "Hike").then((s) => {
+      setLiveStatus(s);
+      // TEMP debug: surface the result so we can diagnose on-device.
+      if (s !== "not-ios") window.alert("Live Activity: " + s);
+    });
     const push = () => {
       if (liveRef.current) void updateHikeActivity(liveRef.current);
     };
