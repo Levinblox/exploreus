@@ -477,7 +477,7 @@ function RecordInner() {
             <Stat label="Elev. gain" value={formatElevation(elevationM)} />
           </div>
 
-          {liveStatus && liveStatus !== "started" && (
+          {liveStatus && (
             <p className="mt-2 text-center text-[10px] text-zinc-400 dark:text-zinc-500">
               Lock-screen status: {liveStatus}
             </p>
