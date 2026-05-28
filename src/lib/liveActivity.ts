@@ -20,7 +20,7 @@ export type LiveActivityUpdate = {
 };
 
 interface LiveActivityPlugin {
-  start(options: { title: string }): Promise<void>;
+  start(options: { title: string }): Promise<{ status?: string }>;
   update(options: {
     elapsed: string;
     distance: string;
@@ -38,12 +38,15 @@ const Plugin = registerPlugin<LiveActivityPlugin>("LiveActivity");
 // Live Activities are iOS-only (16.2+). Elsewhere everything no-ops.
 const supported = Capacitor.getPlatform() === "ios";
 
-export async function startHikeActivity(title: string): Promise<void> {
-  if (!supported) return;
+// Returns a short status so the UI can surface why a Live Activity didn't show
+// (e.g. "started", "activities-disabled-in-settings", "no-plugin: ...").
+export async function startHikeActivity(title: string): Promise<string> {
+  if (!supported) return "not-ios";
   try {
-    await Plugin.start({ title });
-  } catch {
-    // Plugin not wired up yet, or activities disabled — ignore.
+    const r = await Plugin.start({ title });
+    return r?.status ?? "started";
+  } catch (e) {
+    return "no-plugin: " + (e instanceof Error ? e.message : String(e));
   }
 }
 

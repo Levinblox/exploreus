@@ -57,6 +57,7 @@ function RecordInner() {
   const params = useSearchParams();
   const trailId = params.get("trail");
   const [followTrail, setFollowTrail] = useState<Trail | null>(null);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [points, setPoints] = useState<GeoPoint[]>([]);
   const [userLoc, setUserLoc] = useState<UserLoc | null>(null);
@@ -128,7 +129,7 @@ function RecordInner() {
   const followName = followTrail?.name;
   useEffect(() => {
     if (!sessionActive) return;
-    void startHikeActivity(followName ?? "Hike");
+    startHikeActivity(followName ?? "Hike").then(setLiveStatus);
     const push = () => {
       if (liveRef.current) void updateHikeActivity(liveRef.current);
     };
@@ -136,6 +137,7 @@ function RecordInner() {
     const id = setInterval(push, 7000);
     return () => {
       clearInterval(id);
+      setLiveStatus(null);
       void endHikeActivity();
     };
   }, [sessionActive, followName]);
@@ -474,6 +476,12 @@ function RecordInner() {
             <Stat label="Speed" value={formatSpeed(speedMps)} />
             <Stat label="Elev. gain" value={formatElevation(elevationM)} />
           </div>
+
+          {liveStatus && liveStatus !== "started" && (
+            <p className="mt-2 text-center text-[10px] text-zinc-400 dark:text-zinc-500">
+              Lock-screen status: {liveStatus}
+            </p>
+          )}
 
           <div className="mt-5 flex items-center gap-3">
             {status === "idle" && (

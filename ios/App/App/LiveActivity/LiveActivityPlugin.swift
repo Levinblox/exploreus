@@ -25,11 +25,13 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     private var snapshotVersion = 0
 
     @objc func start(_ call: CAPPluginCall) {
-        guard #available(iOS 16.2, *) else { call.resolve(); return }
+        guard #available(iOS 16.2, *) else {
+            call.resolve(["status": "needs-iOS-16.2"]); return
+        }
         let title = call.getString("title") ?? "Hike"
         DispatchQueue.main.async {
             guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-                call.resolve(); return
+                call.resolve(["status": "activities-disabled-in-settings"]); return
             }
             self.endInternal()
             let attributes = HikeActivityAttributes(title: title)
@@ -43,10 +45,11 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                     content: ActivityContent(state: state, staleDate: nil),
                     pushType: nil
                 )
+                call.resolve(["status": "started"])
             } catch {
                 CAPLog.print("LiveActivity start failed: \(error)")
+                call.resolve(["status": "request-failed: \(error.localizedDescription)"])
             }
-            call.resolve()
         }
     }
 
