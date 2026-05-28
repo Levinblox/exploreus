@@ -11,8 +11,10 @@ RUN apt-get update \
 WORKDIR /app
 
 # Install only production deps. tsx + the AWS/Neon/Hono libs are in deps.
+# Using `npm install` (not `npm ci`) because some transitive deps are
+# platform-optional and the macOS-generated lockfile misses Linux variants.
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Server source. We deliberately don't copy the Next.js app since the iOS
 # bundle hosts the frontend and the API is the only thing we deploy.
