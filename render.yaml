@@ -1,0 +1,23 @@
+# Render Blueprint. Connect this repo on Render and it picks up the Dockerfile
+# + env vars automatically. Secrets aren't checked in — set them in the Render
+# dashboard before the first deploy.
+
+services:
+  - type: web
+    name: exploreus-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: exploreus
+      - key: R2_PUBLIC_URL
+        sync: false

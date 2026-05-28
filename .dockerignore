@@ -1,0 +1,8 @@
+node_modules
+.next
+out
+ios
+.git
+.env*
+*.log
+.DS_Store

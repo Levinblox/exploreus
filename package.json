@@ -1,23 +1,42 @@
 {
-  "name": "exploreus-scaffold",
+  "name": "exploreus",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "ios:sync": "next build && cap sync ios",
+    "ios:open": "cap open ios",
+    "server": "tsx watch server/index.ts",
+    "db:apply": "tsx db/apply.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1055.0",
+    "@aws-sdk/s3-request-presigner": "^3.1055.0",
+    "@capacitor-community/background-geolocation": "^1.2.26",
+    "@capacitor/cli": "^7.6.5",
+    "@capacitor/core": "^7.6.5",
+    "@capacitor/geolocation": "^7.1.8",
+    "@capacitor/ios": "^7.6.5",
+    "@hono/node-server": "^2.0.4",
+    "@neondatabase/serverless": "^1.1.0",
+    "@supabase/supabase-js": "^2.106.2",
+    "hono": "^4.12.23",
+    "mapbox-gl": "^3.24.0",
+    "tsx": "^4.22.3",
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-map-gl": "^8.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
